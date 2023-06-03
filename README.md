@@ -1,2 +1,2 @@
 # GoTaskFlow
-A golang task manager which uses Temporal Workflows to manage tasks
+A golang task manager which uses Temporal Workflow to manage tasks
