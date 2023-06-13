@@ -1,0 +1,22 @@
+app_name: goTaskFlow
+env: dev
+# Server Configuration
+server:
+  host: "localhost"
+  port: 8085
+
+# Database Credentials
+database:
+  name: "goTaskFlow"
+  user: "goTaskFlow"
+  password: "password"
+  port: 5432
+  host: "localhost"
+  timeout: 60
+  # migrations:
+  #   verbose: false
+  #   dialect: postgres
+  #   down: false
+
+logger:
+  level: 1  
