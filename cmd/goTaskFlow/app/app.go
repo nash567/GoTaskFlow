@@ -7,13 +7,16 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/GoTaskFlow/api/http/task"
+	"github.com/GoTaskFlow/api/http/user"
+
 	"github.com/GoTaskFlow/internal/config"
 	"github.com/GoTaskFlow/pkg/db"
 	"github.com/GoTaskFlow/pkg/logger"
 	logModel "github.com/GoTaskFlow/pkg/logger/model"
+	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
-	"github.com/rs/cors"
 )
 
 const timeout = 5 * time.Second
@@ -24,6 +27,7 @@ type Application struct {
 	cfg        *config.Config
 	router     *mux.Router
 	log        logModel.Logger
+	services   *services
 }
 
 func (a *Application) Init(ctx context.Context, configFile string, migrationPath string, seedDataPath string) {
@@ -52,25 +56,27 @@ func (a *Application) Init(ctx context.Context, configFile string, migrationPath
 	a.db = db
 	a.log.WithField("host", a.cfg.DB.Host).WithField("port", a.cfg.DB.Port).Info("created database connection successfully")
 
-	router := mux.NewRouter()
-	a.router = router
+	a.router = mux.NewRouter()
+
+	a.services = buildServices(a.db)
+	a.setupHandlers()
 }
 
 func (a *Application) Start(ctx context.Context) {
-	a.router.Use(cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"},
-		AllowCredentials: true,
-		Debug:            true,
-		AllowedHeaders:   []string{"accept", "Authorization", "content-type"},
-		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
-	}).Handler)
+	corsHandler := handlers.CORS(
+		handlers.AllowedOrigins([]string{"*"}),
+		handlers.AllowedMethods([]string{"GET", "POST", "PUT", "DELETE"}),
+		handlers.AllowedHeaders([]string{"Accept", "Authorization", "Content-Type"}),
+	)
+	a.router.Use(corsHandler)
+
 	a.httpServer = &http.Server{
 		Addr:              ":" + fmt.Sprintf("%v", a.cfg.Server.Port),
 		Handler:           a.router,
 		ReadHeaderTimeout: timeout,
 	}
 	go func() {
-		defer a.log.Warn("server stopped listening...")
+		defer a.log.Error("server stopped listening...")
 
 		if err := a.httpServer.ListenAndServe(); err != nil {
 			a.log.WithError(err).Fatal("failed to listen and serve")
@@ -86,4 +92,9 @@ func (a *Application) Stop(ctx context.Context) {
 	}
 
 	a.log.Warn("shutting down....")
+}
+
+func (a *Application) setupHandlers() {
+	user.RegisterHandlers(a.router, a.services.userSvc, a.log)
+	task.RegisterHandlers(a.router, a.services.taskSvc, a.log)
 }
