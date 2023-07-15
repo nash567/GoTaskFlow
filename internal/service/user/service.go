@@ -32,10 +32,23 @@ func (s *Service) Get(ctx context.Context) ([]model.User, error) {
 	return users, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id string) (model.User, error) {
-	user, err := s.repo.GetByID(ctx, id)
+func (s *Service) GetUserByID(ctx context.Context, id string) (model.User, error) {
+	user, err := s.repo.GetUserByID(ctx, &model.Filter{
+		ID: []string{id},
+	})
 	if err != nil {
 		return user, fmt.Errorf("service: getByID: %w", err)
 	}
 	return user, nil
+}
+
+func (s *Service) GetUsersByID(ctx context.Context, ids []string) ([]model.User, error) {
+	users, err := s.repo.GetUsersByID(ctx, &model.Filter{
+		ID: ids,
+	})
+	if err != nil {
+		return users, fmt.Errorf("service: getUsersByID: %w", err)
+	}
+	return users, nil
+
 }

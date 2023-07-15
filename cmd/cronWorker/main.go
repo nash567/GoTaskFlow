@@ -9,7 +9,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/GoTaskFlow/cmd/goTaskFlow/app"
+	"github.com/GoTaskFlow/cmd/cronWorker/app"
 )
 
 const (
@@ -35,7 +35,7 @@ func main() {
 	sigterm := make(chan os.Signal, 1)
 	signal.Notify(sigterm, syscall.SIGINT, syscall.SIGTERM, os.Interrupt)
 	<-sigterm
-	application.Stop(ctx)
+	// application.Stop(ctx)
 	defer func(cancel context.CancelFunc) {
 		cancel()
 		os.Exit(0)

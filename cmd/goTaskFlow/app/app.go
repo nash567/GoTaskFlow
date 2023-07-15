@@ -17,17 +17,19 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
+	temporal "go.temporal.io/sdk/client"
 )
 
 const timeout = 5 * time.Second
 
 type Application struct {
-	db         *sqlx.DB
-	httpServer *http.Server
-	cfg        *config.Config
-	router     *mux.Router
-	log        logModel.Logger
-	services   *services
+	db             *sqlx.DB
+	httpServer     *http.Server
+	cfg            *config.Config
+	router         *mux.Router
+	log            logModel.Logger
+	services       *services
+	temporalClient temporal.Client
 }
 
 func (a *Application) Init(ctx context.Context, configFile string, migrationPath string, seedDataPath string) {
@@ -58,7 +60,15 @@ func (a *Application) Init(ctx context.Context, configFile string, migrationPath
 
 	a.router = mux.NewRouter()
 
-	a.services = buildServices(a.db)
+	temporalOptions := temporal.Options{
+		HostPort: fmt.Sprintf("%s:%s", a.cfg.Temporal.Host, a.cfg.Temporal.Port),
+	}
+	a.temporalClient, err = temporal.Dial(temporalOptions)
+	if err != nil {
+		a.log.Fatalf("temporal client: %w", err)
+
+	}
+	a.services = buildServices(a.db, a.temporalClient, a.log, a.cfg)
 	a.setupHandlers()
 }
 

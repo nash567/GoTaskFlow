@@ -46,7 +46,7 @@ func (res *resource) getById(w http.ResponseWriter, r *http.Request) {
 }
 
 func (res *resource) add(w http.ResponseWriter, r *http.Request) {
-	var task model.Task
+	var task *model.Task
 
 	err := api.SanitizeRequest(r, &task)
 	if err != nil {

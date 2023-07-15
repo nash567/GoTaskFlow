@@ -1,4 +1,4 @@
-package config
+package app
 
 import (
 	"errors"
@@ -21,13 +21,13 @@ type Config struct {
 	} `yaml:"server"`
 	AppName  string           `yaml:"app_name"`
 	Env      string           `yaml:"env"`
-	DB       dbConfig.Config  `yaml:"database"`
 	Log      logConfig.Config `yaml:"logger"`
 	Temporal struct {
 		Host            string `yaml:"host"`
 		Port            string `yaml:"port"`
 		TaskWorkerQueue string `yaml:"task_worker_queue"`
 	} `yaml:"temporal"`
+	DB     dbConfig.Config     `yaml:"database"`
 	Mailer mailerConfig.Config `yaml:"mailer"`
 }
 

@@ -22,22 +22,24 @@ func NewRepository(db *sqlx.DB) model.Repository {
 
 func (r *Repository) Get(ctx context.Context) ([]model.User, error) {
 	var users []model.User
-	err := r.db.SelectContext(ctx, &users, getAllQuery)
+	err := r.db.SelectContext(ctx, &users, getUsers)
 	if err != nil {
 		return nil, fmt.Errorf("repo: get: %w", err)
 	}
 	return users, nil
 }
 
-func (r *Repository) GetByID(ctx context.Context, id string) (model.User, error) {
+func (r *Repository) GetUserByID(ctx context.Context, filter *model.Filter) (model.User, error) {
 	var user model.User
-	err := r.db.GetContext(ctx, &user, getByIdQuery, id)
+	filterQueries, values := buildFilter(filter)
+	err := r.db.GetContext(ctx, &user, getUsers+filterQueries, values...)
 	if err != nil {
+		// TODO: check if this check is needed or not
 		emptyUser := model.User{}
 		if reflect.DeepEqual(user, emptyUser) {
-			return user, internalErrors.NewInvalidIDError(id)
+			return user, internalErrors.NewInvalidIDError(filter.ID[0])
 		}
-		return user, fmt.Errorf("repo: getByID: %w", err)
+		return user, fmt.Errorf("repo: getUserByID: %w", err)
 	}
 	return user, nil
 }
@@ -57,4 +59,16 @@ func (r *Repository) Add(ctx context.Context, user model.User) error {
 	}
 	return nil
 
+}
+func (r *Repository) GetUsersByID(ctx context.Context, filter *model.Filter) ([]model.User, error) {
+	var users []model.User
+	filterQueries, values := buildFilter(filter)
+	fmt.Printf("query build values are.....", values...)
+	fmt.Printf("query build is......", getUsers+filterQueries)
+	fmt.Println("filter inside service is....", filter)
+	err := r.db.SelectContext(ctx, &users, getUsers+filterQueries, values...)
+	if err != nil {
+		return users, fmt.Errorf("repo: getUsersByID: %w", err)
+	}
+	return users, nil
 }

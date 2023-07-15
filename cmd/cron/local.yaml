@@ -1,11 +1,15 @@
-app_name: goTaskFlow
+app_name: cron
 env: dev
-# Server Configuration
 server:
   host: localhost
-  port: 8085
+  port: 8086
+logger:
+  level: 1   
+temporal:
+  host: localhost
+  port: 7233
+  cron_worker_queue: TASK_WORKER_QUEUE
 
-# Database Credentials
 database:
   name: goTaskFlow
   user: goTaskFlow
@@ -13,17 +17,6 @@ database:
   port: 5432
   host: localhost
   timeout: 60
-  # migrations:
-  #   verbose: false
-  #   dialect: postgres
-  #   down: false
-
-logger:
-  level: 1  
-temporal:
-  host: localhost
-  port: 7233
-  task_worker_queue: TASK_WORKER_QUEUE
 mailer:
   host: "smtp.gmail.com"
   port: 587

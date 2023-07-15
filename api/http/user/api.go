@@ -36,7 +36,7 @@ func (res *resource) get(w http.ResponseWriter, r *http.Request) {
 }
 
 func (res *resource) getById(w http.ResponseWriter, r *http.Request) {
-	user, err := res.service.GetByID(r.Context(), mux.Vars(r)["id"])
+	user, err := res.service.GetUserByID(r.Context(), mux.Vars(r)["id"])
 	if err != nil {
 		api.Write(w, http.StatusInternalServerError, api.NewResponse(false, "", err))
 		return

@@ -1,4 +1,4 @@
-package config
+package app
 
 import (
 	"errors"
@@ -15,19 +15,15 @@ import (
 var ErrInvalidFileExtension = errors.New("file extension not supported")
 
 type Config struct {
-	Server struct {
-		Port int    `yaml:"port"`
-		Host string `yaml:"host"`
-	} `yaml:"server"`
 	AppName  string           `yaml:"app_name"`
 	Env      string           `yaml:"env"`
-	DB       dbConfig.Config  `yaml:"database"`
 	Log      logConfig.Config `yaml:"logger"`
 	Temporal struct {
 		Host            string `yaml:"host"`
 		Port            string `yaml:"port"`
-		TaskWorkerQueue string `yaml:"task_worker_queue"`
+		CronWorkerQueue string `yaml:"cron_worker_queue"`
 	} `yaml:"temporal"`
+	DB     dbConfig.Config     `yaml:"database"`
 	Mailer mailerConfig.Config `yaml:"mailer"`
 }
 
