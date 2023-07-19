@@ -3,6 +3,7 @@ package task
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"time"
 
 	mailerModel "github.com/GoTaskFlow/internal/notifications/mail/model"
@@ -20,13 +21,15 @@ import (
 const (
 	createTask          = "CREATE TASK"
 	createNotification  = "CREATE NOTIFICATION"
-	SendMail            = "SEND EMAIL"
+	getUserByID         = "GET USER BY ID"
+	sendMail            = "SEND EMAIL"
 	inQueue             = "IN_QUEUE"
 	failed              = "FAILED"
 	inProgress          = "IN_PROGRESS"
 	completed           = "COMPLETED"
 	NotifyDueDate       = "NOTIFY_DUE_DATE"
 	GetUsersWithDueDate = "GET_USERS_WITH_DUE_DATE"
+	unread              = "UNREAD"
 )
 
 func (s *Service) ExecuteTaskWorkflow(task *model.Task) (*string, *string, error) {
@@ -66,8 +69,9 @@ func (s *Service) TaskWorkflow(ctx workflow.Context, input *model.Task) error {
 			RetryPolicy:         &retryPolicy,
 		}
 
-		stepName *string
-		err      error
+		stepName    *string
+		err         error
+		mailSubject = "Task Assignment"
 	)
 	ctx = workflow.WithActivityOptions(ctx, opts)
 
@@ -75,6 +79,11 @@ func (s *Service) TaskWorkflow(ctx workflow.Context, input *model.Task) error {
 		CreationTimeout:  time.Minute,
 		ExecutionTimeout: time.Hour * 3,
 	}
+	ctx, err = workflow.CreateSession(ctx, sessionOption)
+	if err != nil {
+		return fmt.Errorf("taskWorkflow: createSession: %w", err)
+	}
+
 	defer func(ctx workflow.Context) {
 		defer workflow.CompleteSession(ctx)
 		if err != nil {
@@ -97,11 +106,6 @@ func (s *Service) TaskWorkflow(ctx workflow.Context, input *model.Task) error {
 		}
 	}(ctx)
 
-	ctx, err = workflow.CreateSession(ctx, sessionOption)
-	if err != nil {
-		return err
-	}
-
 	// create task
 	stepName = aws.String(createTask)
 	createTaskFuture := workflow.ExecuteActivity(
@@ -109,59 +113,72 @@ func (s *Service) TaskWorkflow(ctx workflow.Context, input *model.Task) error {
 	)
 	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(inProgress))
 	if err != nil {
-		return err
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
+
 	}
 	var taskID *string
 	if err = createTaskFuture.Get(ctx, &taskID); err != nil {
-		return err
+		return fmt.Errorf("taskWorkflow: createTaskFuture get: %w", err)
 	}
 	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(completed))
 	if err != nil {
-		return err
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
 	}
 
 	// create notification  for user
 	stepName = aws.String(createNotification)
-	createNotificationFuture := workflow.ExecuteActivity(ctx, "CreateNotification", notificationModel.Notification{
-		Message: "task created successfully",
-		UserID:  input.AssignedTo,
-		TaskID:  aws.StringValue(taskID),
-		Status:  notificationModel.StatusUnread,
+	createNotificationFuture := workflow.ExecuteActivity(ctx, "CreateNotification", []notificationModel.Notification{
+		{
+			Message: "task created successfully",
+			UserID:  input.AssignedTo,
+			TaskID:  aws.StringValue(taskID),
+			Status:  notificationModel.StatusUnread,
+		},
 	})
 	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(inProgress))
 	if err != nil {
-		s.log.Errorf("notifyUserWorkflow: updateStepStatus: %s: error:  %w", *stepName, err)
-		return err
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
 
 	}
 	if err = createNotificationFuture.Get(ctx, nil); err != nil {
 		// TODO : delete task created if error occured here using compensating activities
-
-		s.log.Errorf("notifyUserWorkflow: createNotificationFuture get: %w", *stepName, err)
-		return err
+		return fmt.Errorf("taskWorkflow: createNotificationFuture get: %w", err)
 	}
 	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(completed))
 	if err != nil {
-		s.log.Errorf("notifyUserWorkflow: updateStepStatus: %s: error:  %w", *stepName, err)
-		return err
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
+
+	}
+
+	// get userby id
+	stepName = aws.String(getUserByID)
+	var user userModel.User
+	getUserByIDFuture := workflow.ExecuteActivity(ctx, "GetUserByID", input.AssignedTo)
+	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(inProgress))
+	if err != nil {
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
+	}
+	if err = getUserByIDFuture.Get(ctx, &user); err != nil {
+		return fmt.Errorf("taskWorkflow: getUserByIDFuture get: %w", err)
+	}
+	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(completed))
+	if err != nil {
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
 	}
 
 	//  send invitation mail to user
-	stepName = aws.String(SendMail)
-	sendMailFuture := workflow.ExecuteActivity(ctx, s.SendMail, []string{"bipen.c@gopherslab.com"}, "just info", s.getBody(createTaskMail))
+	stepName = aws.String(sendMail)
+	sendMailFuture := workflow.ExecuteActivity(ctx, s.SendMail, []string{user.Email}, mailSubject, s.getBody(createTaskMail))
 	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(inProgress))
 	if err != nil {
-		s.log.Errorf("notifyUserWorkflow: updateStepStatus: %s: error:  %w", *stepName, err)
-		return err
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
 	}
 	if err = sendMailFuture.Get(ctx, nil); err != nil {
-		s.log.Errorf("notifyUserWorkflow: sendMailFuture get: %w", *stepName, err)
-		return err
+		return fmt.Errorf("taskWorkflow: sendMailFuture get: %w", err)
 	}
 	err = s.updateStepStatus(ctx, &input.ID, stepName, aws.String(completed))
 	if err != nil {
-		s.log.Errorf("notifyUserWorkflow: updateStepStatus: %s: error:  %w", *stepName, err)
-		return err
+		return fmt.Errorf("taskWorkflow: updateStepStatus stepName:%s: %w", aws.StringValue(stepName), err)
 	}
 
 	return err
@@ -232,8 +249,9 @@ func (s *Service) NotifyDueDateWorkflow(ctx workflow.Context) error {
 			RetryPolicy:         &retryPolicy,
 		}
 
-		stepName *string
-		err      error
+		stepName    *string
+		err         error
+		mailSubject = "Task Deadline"
 	)
 	ctx = workflow.WithActivityOptions(ctx, opts)
 
@@ -250,9 +268,7 @@ func (s *Service) NotifyDueDateWorkflow(ctx workflow.Context) error {
 	}
 	stepName = aws.String(GetUsersWithDueDate)
 	userMap := make(map[string]userModel.User)
-	// for _,user:= range userMap {
 	future := workflow.ExecuteActivity(ctx, s.GetTasksWithDueDate)
-
 	// TODO: check how to update the step status
 	if err = future.Get(ctx, &userMap); err != nil {
 		s.log.Errorf("notifyUserWorkflow: notifyDueDateFuture get: %w", stepName, err)
@@ -260,10 +276,14 @@ func (s *Service) NotifyDueDateWorkflow(ctx workflow.Context) error {
 	}
 
 	stepName = aws.String(NotifyDueDate)
-	// var timetest = 5 * time.Minute
-	future = workflow.ExecuteActivity(ctx, s.SendMail, []string{"bipen.c@gopherslab.com"}, "deadline", s.getBody(notifyDueDate))
+	userMails := make([]string, 0, len(userMap))
+	for _, value := range userMap {
+		userMails = append(userMails, value.Email)
+	}
+
+	future = workflow.ExecuteActivity(ctx, s.SendMail, userMails, mailSubject, s.getBody(notifyDueDate))
 	if err = future.Get(ctx, nil); err != nil {
-		s.log.Errorf("notifyUserWorkflow: notifyDueDateFuture get: %w", *stepName, err)
+		s.log.Errorf("notifyUserWorkflow: notifyDueDateFuture get: %w", aws.StringValue(stepName), err)
 		return err
 	}
 
@@ -285,9 +305,15 @@ func (s *Service) PrepareTaskSteps(ctx context.Context, tx *sqlx.Tx, taskID stri
 			TaskID:    aws.String(taskID),
 		},
 		{
-			Name:      aws.String(SendMail),
+			Name:      aws.String(getUserByID),
 			Status:    aws.String(inQueue),
 			StepOrder: aws.Int(3),
+			TaskID:    aws.String(taskID),
+		},
+		{
+			Name:      aws.String(sendMail),
+			Status:    aws.String(inQueue),
+			StepOrder: aws.Int(4),
 			TaskID:    aws.String(taskID),
 		},
 	}
@@ -295,7 +321,7 @@ func (s *Service) PrepareTaskSteps(ctx context.Context, tx *sqlx.Tx, taskID stri
 	for _, step := range steps {
 		err := s.repo.AddTaskStep(ctx, step)
 		if err != nil {
-			return fmt.Errorf("workFlow: addTaskStep: %w", err)
+			return fmt.Errorf("taskSerice: prepareTaskSteps: addTaskStep: %w", err)
 		}
 	}
 	return nil
@@ -305,7 +331,7 @@ func (s *Service) PrepareTaskSteps(ctx context.Context, tx *sqlx.Tx, taskID stri
 func (s *Service) GetTasksWithDueDate(ctx context.Context) (map[string]userModel.User, error) {
 	tasks, err := s.repo.GetTasksWithDueDate(ctx)
 	if err != nil {
-		return nil, fmt.Errorf("service: getUsersWithDueDate: %w", err)
+		return nil, fmt.Errorf("service: getTasksWithDueDate: %w", err)
 	}
 	userIDs := make([]string, 0, len(tasks))
 	for _, task := range tasks {
@@ -328,5 +354,106 @@ func (s *Service) GetTasksWithDueDate(ctx context.Context) (map[string]userModel
 	}
 
 	return userMap, nil
+
+}
+
+func (s *Service) UpdateTaskWorkflow(ctx workflow.Context, input *model.UpdateTask) error {
+	var (
+		retryPolicy = temporal.RetryPolicy{
+			InitialInterval:    time.Minute,
+			BackoffCoefficient: 2.0,
+			MaximumInterval:    time.Minute,
+			MaximumAttempts:    1,
+		}
+
+		opts = workflow.ActivityOptions{
+			StartToCloseTimeout: time.Hour,
+			RetryPolicy:         &retryPolicy,
+		}
+
+		err         error
+		mailSubject = "Task Assignment"
+	)
+	ctx = workflow.WithActivityOptions(ctx, opts)
+
+	sessionOption := &workflow.SessionOptions{
+		CreationTimeout:  time.Minute,
+		ExecutionTimeout: time.Hour * 3,
+	}
+	ctx, err = workflow.CreateSession(ctx, sessionOption)
+	if err != nil {
+		return fmt.Errorf("UpdateTaskWorkflow: createSession: %w", err)
+	}
+
+	defer func(ctx workflow.Context) {
+		defer workflow.CompleteSession(ctx)
+	}(ctx)
+
+	// get task by id
+	var originalTask *model.Task
+	getTaskFuture := workflow.ExecuteActivity(ctx, s.GetTaskByID, input.ID)
+	if err = getTaskFuture.Get(ctx, &originalTask); err != nil {
+		return fmt.Errorf("UpdateTaskWorkflow: getTaskFuture get: %w", err)
+	}
+
+	// prepare task for update
+	updateTaskInput := input.PrepareUpateTask(originalTask)
+	// update task
+	updateTaskFuture := workflow.ExecuteActivity(ctx, s.UpdateTaskActivity, updateTaskInput)
+	if err = updateTaskFuture.Get(ctx, nil); err != nil {
+		return fmt.Errorf("UpdateTaskWorkflow: updateTaskFuture get: %w", err)
+	}
+
+	// create notification for each field update
+	assignedTo := originalTask.AssignedTo
+	if updateTaskInput.AssignedTo != "" {
+		assignedTo = updateTaskInput.AssignedTo
+	}
+
+	notifications := s.prepareNotifications(updateTaskInput, assignedTo)
+	createNotificationFuture := workflow.ExecuteActivity(ctx, "CreateNotification", notifications)
+	if err = createNotificationFuture.Get(ctx, nil); err != nil {
+		// TODO : delete task created if error occured here using compensating activities
+		return fmt.Errorf("taskWorkflow: createNotificationFuture get: %w", err)
+	}
+
+	// get user by id
+	var user userModel.User
+	getUserByIDFuture := workflow.ExecuteActivity(ctx, "GetUserByID", assignedTo)
+	if err = getUserByIDFuture.Get(ctx, &user); err != nil {
+		return fmt.Errorf("taskWorkflow: getUserByIDFuture get: %w", err)
+	}
+
+	// send mail to user that task has been updated
+	sendMailFuture := workflow.ExecuteActivity(ctx, s.SendMail, []string{user.Email}, mailSubject, s.getBody(createTaskMail))
+	if err = sendMailFuture.Get(ctx, nil); err != nil {
+		return fmt.Errorf("taskWorkflow: sendMailFuture get: %w", err)
+	}
+
+	return err
+}
+
+func (s *Service) prepareNotifications(task *model.UpdateTask, userID string) []notificationModel.Notification {
+	v := reflect.ValueOf(*task)
+	t := reflect.TypeOf(*task)
+
+	var notifications []notificationModel.Notification
+
+	for i := 0; i < v.NumField(); i++ {
+		// Get the value of the current field.
+		fieldName := t.Field(i).Name
+		fieldValue := v.Field(i).Interface()
+		if !reflect.DeepEqual(fieldValue, reflect.Zero(t.Field(i).Type).Interface()) && fieldName != "ID" {
+			notifications = append(notifications, notificationModel.Notification{
+				Message: fmt.Sprintf(`Task Field, %s has been updated to %v`, fieldName, fieldValue),
+				UserID:  userID,
+				TaskID:  task.ID,
+				Status:  notificationModel.StatusUnread,
+			})
+
+		}
+	}
+
+	return notifications
 
 }

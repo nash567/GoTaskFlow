@@ -3,7 +3,6 @@ package cron
 import (
 	"context"
 	"log"
-	"time"
 
 	taskModel "github.com/GoTaskFlow/internal/service/task/model"
 	"github.com/pborman/uuid"
@@ -39,27 +38,7 @@ func (c *Cron) ScheduleWorkflow(ctx context.Context) {
 	scheduleHandle, err := temporalClient.ScheduleClient().Create(ctx, client.ScheduleOptions{
 		ID: scheduleID,
 		Spec: client.ScheduleSpec{
-			Calendars: []client.ScheduleCalendarSpec{
-				{
-					Hour: []client.ScheduleRange{
-						{
-							Start: 0,
-							End:   0,
-						},
-					},
-					Minute: []client.ScheduleRange{
-						{
-							Start: 0,
-							End:   0,
-						},
-					},
-				},
-			},
-			Intervals: []client.ScheduleIntervalSpec{
-				{
-					Every: 24 * time.Hour,
-				},
-			},
+			CronExpressions: []string{"0 0 * * *"},
 		},
 		Action: &client.ScheduleWorkflowAction{
 			ID:        workflowID,

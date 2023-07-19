@@ -1,35 +1,47 @@
 package repository
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/GoTaskFlow/internal/service/task/model"
-	dbHelper "github.com/GoTaskFlow/pkg/db/helper"
 )
 
-const (
-	taskStepsTable string = "task_steps"
-)
-
-func buildTaskStepFilter(filter *model.Filter) (string, []interface{}) {
+func buildUpdateTaskFilter(filter *model.UpdateTask) string {
 	if filter == nil {
-		return "", nil
-	}
-	f := &dbHelper.Filters{}
-
-	if filter.TaskID != nil {
-		f.AppendInFilter(taskStepsTable, "task_id", toInterfaceArr(filter.TaskID)...)
+		return ""
 	}
 
-	if filter.StepName != nil {
-		f.AppendInFilter(taskStepsTable, "name", toInterfaceArr(filter.StepName)...)
+	q := `update tasks SET `
+	if filter.Title != "" {
+		q += fmt.Sprintf("%s = '%s',", "title", filter.Title)
+
+	}
+	if filter.Description != "" {
+		q += fmt.Sprintf("%s = '%s',", "description", filter.Description)
+
 	}
 
-	return f.Query(dbHelper.LogicalOperatorAnd, true), f.Params()
-}
+	if filter.Status != "" {
+		q += fmt.Sprintf("%s = '%s',", "status", filter.Status)
 
-func toInterfaceArr(v []string) []interface{} {
-	out := make([]interface{}, 0, len(v))
-	for _, i := range v {
-		out = append(out, i)
 	}
-	return out
+	if filter.AssignedTo != "" {
+		q += fmt.Sprintf("%s = '%s',", "assigned_to", filter.AssignedTo)
+
+	}
+
+	if filter.Comments != nil {
+		q += fmt.Sprintf("%s = '%s',", "comments", filter.Comments)
+
+	}
+	if !filter.DueDate.IsZero() {
+		q += fmt.Sprintf("%s = '%s',", "due_date", filter.DueDate)
+
+	}
+
+	q = strings.TrimSuffix(q, ",")
+
+	q += fmt.Sprintf("WHERE id = '%s'", filter.ID)
+	return q
 }

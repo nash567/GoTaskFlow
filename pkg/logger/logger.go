@@ -54,7 +54,6 @@ func (log *ZapLogger) build() error {
 	// 	log.Fatal(err.Error())
 	// }
 	if log.cfg.Output != nil {
-		fmt.Println("i m here...")
 		l = log.writerLog(log.cfg.Output)
 	}
 

@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 
-	internalErrors "github.com/GoTaskFlow/internal/errors"
 	taskError "github.com/GoTaskFlow/internal/service/task/errors"
 	"github.com/GoTaskFlow/internal/service/task/model"
 	"github.com/jmoiron/sqlx"
@@ -28,17 +27,13 @@ func (r *Repository) Get(ctx context.Context) ([]model.Task, error) {
 	return tasks, nil
 }
 
-func (r *Repository) GetByID(ctx context.Context, id string) (*model.Task, error) {
-	var task *model.Task
-	err := r.db.GetContext(ctx, task, getByIdQuery)
+func (r *Repository) GetTaskByID(ctx context.Context, id string) (*model.Task, error) {
+	var task model.Task
+	err := r.db.GetContext(ctx, &task, getByIdQuery, id)
 	if err != nil {
-		fmt.Println("asdada", task)
-		if task == nil {
-			return nil, internalErrors.NewInvalidIDError(id)
-		}
 		return nil, fmt.Errorf("repo: getById: %w", err)
 	}
-	return task, nil
+	return &task, nil
 
 }
 func (r *Repository) Add(ctx context.Context, task *model.Task) (*string, error) {
@@ -104,6 +99,23 @@ func (r *Repository) AddTaskStep(ctx context.Context, taskStep *model.TaskStep) 
 
 	if rowsAffected == 0 {
 		return taskError.NewAddTaskStepError()
+
+	}
+	return nil
+}
+
+func (r *Repository) UpdateTask(ctx context.Context, filter *model.UpdateTask) error {
+	result, err := r.db.ExecContext(ctx, buildUpdateTaskFilter(filter))
+	if err != nil {
+		return fmt.Errorf("repo: updateTask %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("repo: rowsAffected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return taskError.NewUpdateTaskError()
 
 	}
 	return nil

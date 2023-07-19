@@ -7,12 +7,14 @@ import (
 	mailerModel "github.com/GoTaskFlow/internal/notifications/mail/model"
 	notificationModel "github.com/GoTaskFlow/internal/service/notification/model"
 	userModel "github.com/GoTaskFlow/internal/service/user/model"
+	"github.com/google/uuid"
 
 	"github.com/GoTaskFlow/internal/service/task/model"
 	logModel "github.com/GoTaskFlow/pkg/logger/model"
 	"github.com/aws/aws-sdk-go/aws"
 	"github.com/jmoiron/sqlx"
 	temporal "go.temporal.io/sdk/client"
+	temporalClient "go.temporal.io/sdk/client"
 )
 
 type Service struct {
@@ -81,10 +83,43 @@ func (s *Service) Get(ctx context.Context) ([]model.Task, error) {
 	return tasks, nil
 }
 
-func (s *Service) GetByID(ctx context.Context, id string) (*model.Task, error) {
-	task, err := s.repo.GetByID(ctx, id)
+func (s *Service) GetTaskByID(ctx context.Context, id string) (*model.Task, error) {
+	task, err := s.repo.GetTaskByID(ctx, id)
 	if err != nil {
 		return task, fmt.Errorf("service: getById: %w", err)
 	}
 	return task, nil
+}
+
+func (s *Service) UpdateTask(ctx context.Context, task *model.UpdateTask) error {
+	workflowID := uuid.NewString()
+	wctx := context.Background()
+
+	// taskWorkflow
+	o, err := s.temporal.ExecuteWorkflow(
+		wctx,
+		temporalClient.StartWorkflowOptions{
+			ID:        workflowID,
+			TaskQueue: "TASK_WORKER_QUEUE",
+		},
+		s.UpdateTaskWorkflow,
+		task,
+	)
+	if err != nil {
+		return fmt.Errorf("service: updateTask: %w", err)
+	}
+	if err = o.Get(wctx, nil); err != nil {
+		return fmt.Errorf("service: updateTask: get %w", err)
+	}
+
+	return nil
+
+}
+
+func (s *Service) UpdateTaskActivity(ctx context.Context, input *model.UpdateTask) error {
+	err := s.repo.UpdateTask(ctx, input)
+	if err != nil {
+		return fmt.Errorf("service: updateTask: %w", err)
+	}
+	return nil
 }

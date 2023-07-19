@@ -3,11 +3,9 @@ package main
 import (
 	"context"
 	"flag"
-	"fmt"
 	"os"
 	"os/signal"
 	"syscall"
-	"time"
 
 	"github.com/GoTaskFlow/cmd/cron/app"
 )
@@ -17,7 +15,6 @@ const (
 )
 
 func main() {
-	fmt.Println(time.Now().Format(time.RFC3339))
 	var configFile, migrationPath, seedDataPath string
 	flag.StringVar(&configFile, "config", defaultConfPath, "config file to load")
 

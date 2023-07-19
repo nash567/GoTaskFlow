@@ -10,6 +10,16 @@ func NewAddTaskError() AddTaskError {
 	return AddTaskError{}
 }
 
+type UpdateTaskError struct{}
+
+func (e UpdateTaskError) Error() string {
+	return "error updating task"
+}
+
+func NewUpdateTaskError() UpdateTaskError {
+	return UpdateTaskError{}
+}
+
 type AddTaskStepError struct{}
 
 func (e AddTaskStepError) Error() string {

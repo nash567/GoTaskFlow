@@ -15,8 +15,8 @@ func NewService(repo model.Repository) *Service {
 	return &Service{repo: repo}
 }
 
-func (s *Service) CreateNotification(ctx context.Context, notification model.Notification) error {
-	err := s.repo.Add(ctx,  notification)
+func (s *Service) CreateNotification(ctx context.Context, notification []model.Notification) error {
+	err := s.repo.Add(ctx, notification)
 	if err != nil {
 		return fmt.Errorf("service: addNotification: %w", err)
 	}

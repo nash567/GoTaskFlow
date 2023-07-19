@@ -71,7 +71,6 @@ func (a *Application) Init(ctx context.Context, configFile string, migrationPath
 }
 
 func (a *Application) Start(ctx context.Context) {
-	fmt.Println("scheduling workflow................................")
 	a.cronSvc.ScheduleWorkflow(ctx)
 
 }

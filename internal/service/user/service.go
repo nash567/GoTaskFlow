@@ -16,11 +16,13 @@ func NewService(repo model.Repository) model.Service {
 	return &Service{repo}
 }
 
-func (s *Service) Add(ctx context.Context, user model.User) error {
+func (s *Service) Add(ctx context.Context, user *model.User) error {
+
 	err := s.repo.Add(ctx, user)
 	if err != nil {
 		return fmt.Errorf("service: add user: %w ", err)
 	}
+
 	return nil
 }
 

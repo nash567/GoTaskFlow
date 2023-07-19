@@ -16,7 +16,6 @@ import (
 	"github.com/gorilla/handlers"
 	"github.com/gorilla/mux"
 	"github.com/jmoiron/sqlx"
-	"github.com/pborman/uuid"
 
 	mailerService "github.com/GoTaskFlow/internal/notifications/mail"
 	notificationService "github.com/GoTaskFlow/internal/service/notification"
@@ -26,7 +25,6 @@ import (
 	notificationRepo "github.com/GoTaskFlow/internal/service/notification/repo"
 	userModel "github.com/GoTaskFlow/internal/service/user/model"
 	userRepo "github.com/GoTaskFlow/internal/service/user/repo"
-	"go.temporal.io/sdk/client"
 	temporal "go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
 	"go.temporal.io/sdk/workflow"
@@ -105,7 +103,6 @@ func (a *Application) Start(ctx context.Context) {
 func (a *Application) Stop(ctx context.Context) {
 	err := a.httpServer.Shutdown(ctx)
 	if err != nil {
-		fmt.Println("error shutting down http server")
 		log.Println(err)
 	}
 	a.log.Warn("shutting down....")
@@ -119,7 +116,7 @@ func (a *Application) setupRoutes() {
 
 func (a *Application) RegisterWorkflow() worker.Worker {
 
-	// @Todo find from where to get workflowid and other params
+	// Todo find from where to get workflowid and other params
 
 	// _, err := a.temporalClient.ResetWorkflowExecution(context.TODO(), &workflowservice.ResetWorkflowExecutionRequest{
 	// 	Namespace: "default",
@@ -137,14 +134,19 @@ func (a *Application) RegisterWorkflow() worker.Worker {
 	a.mailerSvc = mailerService.NewService(&a.cfg.Mailer)
 	a.userSvc = userService.NewService(userRepo.NewRepository(a.db))
 	a.taskService = taskService.NewService(taskRepo.NewRepository(a.db), a.temporalClient, a.notificationSvc, a.mailerSvc, a.log, a.userSvc)
+	w.RegisterWorkflowWithOptions(a.taskService.UpdateTaskWorkflow, workflow.RegisterOptions{
+		Name: "updateTaskWorkflow",
+	})
 	w.RegisterWorkflowWithOptions(a.taskService.TaskWorkflow, workflow.RegisterOptions{
 		Name: "taskWorkflow",
 	})
-
 	w.RegisterActivity(a.taskService.CreateTask)
 	w.RegisterActivity(a.taskService.UpdateTaskStep)
 	w.RegisterActivity(a.notificationSvc.CreateNotification)
 	w.RegisterActivity(a.taskService.SendMail)
+	w.RegisterActivity(a.userSvc.GetUserByID)
+	w.RegisterActivity(a.taskService.UpdateTaskActivity)
+	w.RegisterActivity(a.taskService.GetTaskByID)
 
 	return w
 }
@@ -158,53 +160,4 @@ func (a *Application) RunWorker(ctx context.Context, w worker.Worker) {
 	if err != nil {
 		log.Fatalf("failed to start temporal worker: %v", err)
 	}
-}
-
-func (a *Application) ScheduleWorkflow(ctx context.Context) {
-	temporalClient, err := client.Dial(client.Options{
-		HostPort: client.DefaultHostPort,
-	})
-	if err != nil {
-		log.Fatalln("Unable to create Temporal Client", err)
-	}
-	defer temporalClient.Close()
-
-	// Create Schedule and Workflow IDs
-	scheduleID := "schedule_" + uuid.New()
-	workflowID := "schedule_workflow_" + uuid.New()
-	// Create the schedule.
-	scheduleHandle, err := temporalClient.ScheduleClient().Create(ctx, client.ScheduleOptions{
-		ID: scheduleID,
-		Spec: client.ScheduleSpec{
-			// Calendars: []client.ScheduleCalendarSpec{
-			// 	{
-			// 		Hour: []client.ScheduleRange{
-			// 			{
-			// 				Start: 0,
-			// 			},
-			// 		},
-			// 		Minute: []client.ScheduleRange{
-			// 			{
-			// 				Start: 30,
-			// 			},
-			// 		},
-			// 	},
-			// },
-			// Intervals: []client.ScheduleIntervalSpec{
-			// 	{
-			// 		Every: 24*time.Hour,
-			// 	},
-			// },
-		},
-		Action: &client.ScheduleWorkflowAction{
-			ID:        workflowID,
-			Workflow:  a.taskService.NotifyDueDateWorkflow,
-			TaskQueue: "TASK_SCHEDULE_QUEUE",
-		},
-	})
-	if err != nil {
-		log.Fatalln("Unable to create schedule", err)
-	}
-	log.Println("Schedule created", "ScheduleID", scheduleID)
-	_, _ = scheduleHandle.Describe(ctx)
 }

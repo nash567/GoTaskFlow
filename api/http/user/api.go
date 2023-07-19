@@ -7,6 +7,7 @@ import (
 	"github.com/GoTaskFlow/internal/service/user/model"
 	log "github.com/GoTaskFlow/pkg/logger/model"
 	"github.com/gorilla/mux"
+	"github.com/pborman/uuid"
 )
 
 type resource struct {
@@ -46,14 +47,14 @@ func (res *resource) getById(w http.ResponseWriter, r *http.Request) {
 
 func (res *resource) add(w http.ResponseWriter, r *http.Request) {
 	var user model.User
-
 	err := api.SanitizeRequest(r, &user)
 	if err != nil {
 		api.Write(w, http.StatusInternalServerError, api.NewResponse(false, api.ErrorInvalidRequest, err))
 		return
 
 	}
-	err = res.service.Add(r.Context(), user)
+	user.ID = uuid.New()
+	err = res.service.Add(r.Context(), &user)
 	if err != nil {
 		api.Write(w, http.StatusInternalServerError, api.NewResponse(false, "failed to add user", err))
 		return

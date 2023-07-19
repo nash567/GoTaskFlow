@@ -17,19 +17,14 @@ func NewRepository(db *sqlx.DB) *Repository {
 	return &Repository{db}
 }
 
-func (r *Repository) Add(ctx context.Context,notification model.Notification) error {
+func (r *Repository) Add(ctx context.Context, notification []model.Notification) error {
 	tx, err := r.db.Beginx()
 	if err != nil {
 		return fmt.Errorf("repo: newTransaction: %w", err)
 	}
-	result, err := tx.ExecContext(
-		ctx,
-		addQuery,
-		notification.Message,
-		notification.UserID,
-		notification.TaskID,
-		notification.Status,
-	)
+
+	query, values := buildCreateNotificationFilter(notification)
+	result, err := tx.ExecContext(ctx, query, values...)
 	if err != nil {
 		return fmt.Errorf("repo: add user: %w", err)
 	}

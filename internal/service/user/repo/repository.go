@@ -43,7 +43,7 @@ func (r *Repository) GetUserByID(ctx context.Context, filter *model.Filter) (mod
 	}
 	return user, nil
 }
-func (r *Repository) Add(ctx context.Context, user model.User) error {
+func (r *Repository) Add(ctx context.Context, user *model.User) error {
 	result, err := r.db.ExecContext(ctx, addQuery, user.ID, user.Name, user.Email, user.Password, user.Active)
 	if err != nil {
 		return fmt.Errorf("repo: add user: %w", err)
@@ -63,9 +63,6 @@ func (r *Repository) Add(ctx context.Context, user model.User) error {
 func (r *Repository) GetUsersByID(ctx context.Context, filter *model.Filter) ([]model.User, error) {
 	var users []model.User
 	filterQueries, values := buildFilter(filter)
-	fmt.Printf("query build values are.....", values...)
-	fmt.Printf("query build is......", getUsers+filterQueries)
-	fmt.Println("filter inside service is....", filter)
 	err := r.db.SelectContext(ctx, &users, getUsers+filterQueries, values...)
 	if err != nil {
 		return users, fmt.Errorf("repo: getUsersByID: %w", err)

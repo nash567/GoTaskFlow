@@ -5,13 +5,13 @@ import (
 )
 
 type Service interface {
-	CreateNotification(context.Context, Notification) error
+	CreateNotification(context.Context, []Notification) error
 	Get(context.Context) ([]Notification, error)
 	GetByID(context.Context, string) (Notification, error)
 }
 
 type Repository interface {
-	Add(context.Context,  Notification) error
+	Add(context.Context, []Notification) error
 	Get(context.Context) ([]Notification, error)
 	GetByID(context.Context, string) (Notification, error)
 }
