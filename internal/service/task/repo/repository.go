@@ -105,7 +105,11 @@ func (r *Repository) AddTaskStep(ctx context.Context, taskStep *model.TaskStep) 
 }
 
 func (r *Repository) UpdateTask(ctx context.Context, filter *model.UpdateTask) error {
-	result, err := r.db.ExecContext(ctx, buildUpdateTaskFilter(filter))
+	query, err := buildUpdateTaskFilter(filter)
+	if err != nil {
+		return fmt.Errorf("repo: buildUpdateTaskFilter: %w", err)
+	}
+	result, err := r.db.ExecContext(ctx, query)
 	if err != nil {
 		return fmt.Errorf("repo: updateTask %w", err)
 	}

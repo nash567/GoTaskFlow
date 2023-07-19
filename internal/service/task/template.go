@@ -7,6 +7,7 @@ import (
 
 var createTaskMail = `<h1>Task has been created for you</h1>`
 var notifyDueDate = `<h1>Task has reached the due date! Please complete it</h1>`
+var updateTaskMail = `<h1>Task has been updayted.</h1>`
 
 func (s *Service) getBody(body string) string {
 	tmpl, err := template.New("taskCreation").Parse(body)

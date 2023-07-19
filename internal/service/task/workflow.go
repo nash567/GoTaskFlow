@@ -372,7 +372,7 @@ func (s *Service) UpdateTaskWorkflow(ctx workflow.Context, input *model.UpdateTa
 		}
 
 		err         error
-		mailSubject = "Task Assignment"
+		mailSubject = "Task Update"
 	)
 	ctx = workflow.WithActivityOptions(ctx, opts)
 
@@ -398,6 +398,7 @@ func (s *Service) UpdateTaskWorkflow(ctx workflow.Context, input *model.UpdateTa
 
 	// prepare task for update
 	updateTaskInput := input.PrepareUpateTask(originalTask)
+
 	// update task
 	updateTaskFuture := workflow.ExecuteActivity(ctx, s.UpdateTaskActivity, updateTaskInput)
 	if err = updateTaskFuture.Get(ctx, nil); err != nil {
@@ -416,16 +417,28 @@ func (s *Service) UpdateTaskWorkflow(ctx workflow.Context, input *model.UpdateTa
 		// TODO : delete task created if error occured here using compensating activities
 		return fmt.Errorf("taskWorkflow: createNotificationFuture get: %w", err)
 	}
-
 	// get user by id
-	var user userModel.User
-	getUserByIDFuture := workflow.ExecuteActivity(ctx, "GetUserByID", assignedTo)
-	if err = getUserByIDFuture.Get(ctx, &user); err != nil {
+	var users []userModel.User
+	getUserByIDFuture := workflow.ExecuteActivity(ctx, "GetUsersByID", []string{assignedTo, originalTask.AssignedTo})
+	if err = getUserByIDFuture.Get(ctx, &users); err != nil {
 		return fmt.Errorf("taskWorkflow: getUserByIDFuture get: %w", err)
 	}
+	var userEmails []string
+	for _, user := range users {
+		userEmails = append(userEmails, user.Email)
+	}
 
-	// send mail to user that task has been updated
-	sendMailFuture := workflow.ExecuteActivity(ctx, s.SendMail, []string{user.Email}, mailSubject, s.getBody(createTaskMail))
+	if updateTaskInput.AssignedTo != "" && updateTaskInput.AssignedTo != originalTask.AssignedTo {
+		if len(userEmails) <= 1 {
+			// send mail to user that task has been updated
+			sendMailFuture := workflow.ExecuteActivity(ctx, s.SendMail, []string{userEmails[0], userEmails[1]}, mailSubject, s.getBody(createTaskMail))
+			if err = sendMailFuture.Get(ctx, nil); err != nil {
+				return fmt.Errorf("taskWorkflow: sendMailFuture get: %w", err)
+			}
+		}
+	}
+
+	sendMailFuture := workflow.ExecuteActivity(ctx, s.SendMail, []string{userEmails[0]}, mailSubject, s.getBody(updateTaskMail))
 	if err = sendMailFuture.Get(ctx, nil); err != nil {
 		return fmt.Errorf("taskWorkflow: sendMailFuture get: %w", err)
 	}

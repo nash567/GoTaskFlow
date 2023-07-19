@@ -113,7 +113,6 @@ func (s *Service) UpdateTask(ctx context.Context, task *model.UpdateTask) error 
 	}
 
 	return nil
-
 }
 
 func (s *Service) UpdateTaskActivity(ctx context.Context, input *model.UpdateTask) error {

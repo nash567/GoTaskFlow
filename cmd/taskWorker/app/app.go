@@ -147,6 +147,7 @@ func (a *Application) RegisterWorkflow() worker.Worker {
 	w.RegisterActivity(a.userSvc.GetUserByID)
 	w.RegisterActivity(a.taskService.UpdateTaskActivity)
 	w.RegisterActivity(a.taskService.GetTaskByID)
+	w.RegisterActivity(a.userSvc.GetUsersByID)
 
 	return w
 }
